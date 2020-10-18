@@ -20,6 +20,7 @@ const fetch = require('node-fetch');
 
     await page.goto(url, { waitUntil: 'networkidle2' });
 
+    console.log('Logging in...');
     await page.type('#userid', config.email, { delay: 50 });
     await page.type('#password', config.pass, { delay: 50 });
 
@@ -29,10 +30,9 @@ const fetch = require('node-fetch');
 
     const analysisLinks = await page.$$('.gamePreview');
 
-    console.log(analysisLinks.length);
+    console.log('Logged in successfully. \n Gathering analysis links for each game...');
 
     var allGames;
-
 
     if (analysisLinks.length > 0) {
         for (var i = 0; i < analysisLinks.length; i++) {
@@ -133,6 +133,7 @@ const fetch = require('node-fetch');
         }
     } else {
         console.log("Games could not be found.\nClosing browser.");
+        page.close();
         browser.close();
     }
 })();
@@ -157,7 +158,7 @@ const saveData = async data => {
             "Accept": "application/json"
         };
         const jsonWithMessage = ({
-            message: "saving items",
+            message: "saving game stats",
             data: data
         });
         var greatData = JSON.stringify(jsonWithMessage, null, 2);
