@@ -1,0 +1,18 @@
+{
+  "name": "football-picks-automation",
+  "version": "1.0.0",
+  "description": "Uses Node and Puppeteer to select football picks on CBS Sports",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jacob Jauregui",
+  "license": "ISC",
+  "dependencies": {
+    "async": "^3.2.0",
+    "fs": "0.0.1-security",
+    "lodash": "^4.17.20",
+    "node-fetch": "^2.6.1",
+    "puppeteer": "^5.3.1"
+  }
+}
