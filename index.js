@@ -3,6 +3,7 @@ const fs = require('fs');
 const config = require('./config.json');
 const { delay, result } = require('lodash');
 const fetch = require('node-fetch');
+const { exit } = require('process');
 // const cookies = require('cookies.json');
 
 (async () => {
@@ -20,6 +21,7 @@ const fetch = require('node-fetch');
 
     await page.goto(url, { waitUntil: 'networkidle2' });
 
+    console.log('Logging in...');
     await page.type('#userid', config.email, { delay: 50 });
     await page.type('#password', config.pass, { delay: 50 });
 
@@ -29,21 +31,21 @@ const fetch = require('node-fetch');
 
     const analysisLinks = await page.$$('.gamePreview');
 
-    console.log(analysisLinks.length);
+    console.log('Logged in successfully. \n Gathering analysis links for each game...');
 
     var allGames;
-
 
     if (analysisLinks.length > 0) {
         for (var i = 0; i < analysisLinks.length; i++) {
             analysisLinks[i].click();
-            console.log('waiting for selector...');
+            console.log('Waiting for selector...');
             await page.waitForSelector('.awayTeam .teamInfoLocation');
-            console.log("done.");
+            console.log("Done.");
             try {
 
                 const matchUp = await page.evaluate(() =>
                     Array.from(document.querySelectorAll("#gamePreviewDialogPopup #officePoolMatchupAnalysis")).map(game => ({
+                        match_date: game.querySelector("#topBar .date").innerText,
                         away_location: game.querySelector(".awayTeam .teamInfoLocation").innerText,
                         home_location: game.querySelector(".homeTeam .teamInfoLocation").innerText,
                         away_nickname: game.querySelector(".awayTeam .teamInfoNickname").innerText,
@@ -56,20 +58,88 @@ const fetch = require('node-fetch');
                         home_ties: game.querySelector(".homeTeam .teamInfoRecord").innerText.split('-')[2] != null ? parseInt(game.querySelector(".homeTeam .teamInfoRecord").innerText.split('-')[2]) : 0,
                         away_power_rank: parseInt(game.querySelectorAll(".scrollableSection .awayTeam .statItem .statValue")[2].innerText.replace(/(\d+)(st|nd|rd|th)/, "$1")),
                         home_power_rank: parseInt(game.querySelectorAll(".scrollableSection .homeTeam .statItem .statValue")[2].innerText.replace(/(\d+)(st|nd|rd|th)/, "$1")),
+                        away_ppg: parseFloat(game.querySelectorAll("#keyStatsBar .keyStatsCell")[1].innerText),
+                        home_ppg: parseFloat(game.querySelectorAll("#keyStatsBar .keyStatsCell")[3].innerText),
+                        away_papg: parseFloat(game.querySelectorAll("#keyStatsBar .keyStatsCell")[6].innerText),
+                        home_papg: parseFloat(game.querySelectorAll("#keyStatsBar .keyStatsCell")[8].innerText),
+                        away_ypg: parseFloat(game.querySelectorAll("#keyStatsBar .keyStatsCell")[11].innerText),
+                        home_ypg: parseFloat(game.querySelectorAll("#keyStatsBar .keyStatsCell")[13].innerText),
+                        away_yapg: parseFloat(game.querySelectorAll("#keyStatsBar .keyStatsCell")[16].innerText),
+                        home_yapg: parseFloat(game.querySelectorAll("#keyStatsBar .keyStatsCell")[18].innerText),
+                        away_tally: null,
+                        home_tally: null,
                         my_pick: null,
                         winner: null
                     })),
                 );
 
-                // Pick based on highest score
+                // Worse case - just pick the home team.
                 let pickHome = true;
-                if (parseInt(matchUp[0]["home_wins"]) >= parseInt(matchUp[0]["away_wins"])) {
-                    matchUp[0]["my_pick"] = matchUp[0]["home_location"];
-                    pickHome = true;
 
-                } else {
-                    matchUp[0]["my_pick"] = matchUp[0]["away_location"];
+                // Points awarded for having the better stat
+                // will compare totals in the end for the choice.
+                let awayMerits = 0;
+                let homeMerits = 0;
+
+                var homeGameTotal = parseInt(matchUp[0]["home_wins"] + matchUp[0]["home_losses"] + matchUp[0]["home_ties"]);
+                var awayGameTotal = parseInt(matchUp[0]["away_wins"] + matchUp[0]["away_losses"] + matchUp[0]["away_ties"]);
+                // ^^^ Make sure the games played are the same for a fair comparison vvv
+                if (homeGameTotal == awayGameTotal) {
+                    if (parseInt(matchUp[0]["home_wins"]) > parseInt(matchUp[0]["away_wins"])) {
+                        homeMerits += 1;
+                    }
+                    if (parseInt(matchUp[0]["home_wins"]) < parseInt(matchUp[0]["away_wins"])) {
+                        awayMerits += 1;
+                    }
+                }
+                // **** MIGHT REMOVE
+                if (parseInt(matchUp[0]["home_power_rank"]) < parseInt(matchUp[0]["away_power_rank"])) {
+                    homeMerits += 1;
+                }
+                if (parseInt(matchUp[0]["away_power_rank"]) < parseInt(matchUp[0]["home_power_rank"])) {
+                    awayMerits += 1;
+                }
+                // **** MIGHT REMOVE ^^
+
+                if (parseFloat(matchUp[0]["home_ppg"]) > parseFloat(matchUp[0]["away_ppg"])) {
+                    homeMerits += 1;
+                }
+                if (parseFloat(matchUp[0]["home_ppg"]) < parseFloat(matchUp[0]["away_ppg"])) {
+                    awayMerits += 1;
+                }
+
+
+                if (parseFloat(matchUp[0]["home_papg"]) < parseFloat(matchUp[0]["away_papg"])) {
+                    homeMerits += 1;
+                }
+                if (parseFloat(matchUp[0]["home_papg"]) > parseFloat(matchUp[0]["away_papg"])) {
+                    awayMerits += 1;
+                }
+
+
+                if (parseFloat(matchUp[0]["home_ypg"]) > parseFloat(matchUp[0]["away_ypg"])) {
+                    homeMerits += 1;
+                }
+                if (parseFloat(matchUp[0]["home_ypg"]) < parseFloat(matchUp[0]["away_ypg"])) {
+                    awayMerits += 1;
+                }
+
+                if (parseFloat(matchUp[0]["home_yapg"]) < parseFloat(matchUp[0]["away_yapg"])) {
+                    homeMerits += 1;
+                }
+                if (parseFloat(matchUp[0]["home_yapg"]) > parseFloat(matchUp[0]["away_yapg"])) {
+                    awayMerits += 1;
+                }
+
+                matchUp[0]["home_tally"] = homeMerits;
+                matchUp[0]["away_tally"] = awayMerits;
+
+                if (homeMerits < awayMerits) {
+                    matchUp[0]["my_pick"] = "away";
                     pickHome = false;
+                } else {
+                    matchUp[0]["my_pick"] = "home";
+                    pickHome = true;
                 }
 
                 if (i == 0) {
@@ -77,10 +147,9 @@ const fetch = require('node-fetch');
                 } else {
                     allGames = allGames.concat(matchUp);
                 }
+
                 console.log(allGames);
                 await waitForTime(500);
-
-                // await makePick(pickHome, page);
 
                 await page.evaluate((pickHome) => {
 
@@ -97,6 +166,7 @@ const fetch = require('node-fetch');
                         }
                     }
 
+                    //done analysing stats - close popup.  
                     var closeButton = document.querySelector("#closeSnippet");
                     closeButton.click();
 
@@ -118,7 +188,7 @@ const fetch = require('node-fetch');
                     fs.writeFile(
                         './picks.json',
                         JSON.stringify(allGames, null, 2),
-                        (err) => err ? console.error('data not written!', err) : console.log('\tData file updated!')
+                        (err) => err ? console.error('\tData not written!\n', err) : console.log('\tData file updated!\n')
                     );
 
                     saveData(allGames);
@@ -133,13 +203,14 @@ const fetch = require('node-fetch');
         }
     } else {
         console.log("Games could not be found.\nClosing browser.");
+        page.close();
         browser.close();
     }
 })();
 
 function waitForTime(time) {
     return new Promise(function (resolve) {
-        setTimeout(resolve, time)
+        setTimeout(resolve, time);
     });
 }
 
@@ -147,9 +218,9 @@ function waitForTime(time) {
 const saveData = async data => {
     try {
         console.log("Saving data...");
-        // let jsonData = JSON.stringify(data, null, 2);
-        // console.log(jsonData);
-        await waitForTime(1000);
+
+        await waitForTime(900);
+
         // Try to connect to API
         const apiSaveUrl = 'http://laravel-api-sports.lndo.site/api/games';
         const headers = {
@@ -157,15 +228,18 @@ const saveData = async data => {
             "Accept": "application/json"
         };
         const jsonWithMessage = ({
-            message: "saving items",
+            message: "saving game stats",
             data: data
         });
         var greatData = JSON.stringify(jsonWithMessage, null, 2);
         console.log("THE JSON: \n");
         console.log(greatData);
         const response = await fetch(apiSaveUrl, { method: "POST", headers: headers, body: greatData });
-        const json = await response.json();
-        console.log(json);
+        if (response.status === 201) {
+            console.log('Data was stored successfully!\n\n\n');
+        } else {
+            console.log('Error saving data to the API\nStatus Code: ' + response.status + '\n\n\n');
+        }
 
     } catch (error) {
         console.log(error);
