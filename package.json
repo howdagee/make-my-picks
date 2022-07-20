@@ -9,7 +9,7 @@
   "author": "Jacob Jauregui",
   "license": "ISC",
   "dependencies": {
-    "async": "^3.2.0",
+    "async": "^3.2.2",
     "fs": "0.0.1-security",
     "lodash": "^4.17.20",
     "node-fetch": "^2.6.1",
